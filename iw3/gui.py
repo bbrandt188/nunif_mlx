@@ -1,4 +1,4 @@
-import nunif.pythonw_fix  # noqa
+import mlx  # Replace torch with mlx
 import locale
 import sys
 import os
@@ -25,11 +25,9 @@ from nunif.utils.gui import (
     resolve_default_dir, extension_list_to_wildcard, validate_number,
     set_icon_ex, start_file, load_icon)
 from .locales import LOCALES
-from . import models # noqa
+from . import models  # noqa
 from .depth_anything_model import MODEL_FILES as DEPTH_ANYTHING_MODELS, has_model as depth_anything_has_model
 from . import export_config
-import torch
-
 
 IMAGE_EXTENSIONS = extension_list_to_wildcard(LOADER_SUPPORTED_EXTENSIONS)
 VIDEO_EXTENSIONS = extension_list_to_wildcard(KNOWN_VIDEO_EXTENSIONS)
@@ -37,9 +35,7 @@ YAML_EXTENSIONS = extension_list_to_wildcard((".yml", ".yaml"))
 CONFIG_PATH = path.join(path.dirname(__file__), "..", "tmp", "iw3-gui.cfg")
 os.makedirs(path.dirname(CONFIG_PATH), exist_ok=True)
 
-
 LAYOUT_DEBUG = False
-
 
 LEVEL_LIBX264 = ["3.0", "3.1", "3.2", "4.0", "4.1", "4.2", "5.0", "5.1", "5.2", "6.0", "6.2"]
 LEVEL_LIBX265 = ["3.0", "3.1", "4.0", "4.1", "5.0", "5.1", "5.2", "6.0", "6.1", "6.2", "8.5"]
@@ -94,7 +90,6 @@ class MainFrame(wx.Frame):
         self.CreateStatusBar()
 
         # input output panel
-
         self.pnl_file = wx.Panel(self)
         if LAYOUT_DEBUG:
             self.pnl_file.SetBackgroundColour("#ccf")
@@ -152,14 +147,11 @@ class MainFrame(wx.Frame):
         self.pnl_file.SetSizer(layout)
 
         # options panel
-
         self.pnl_options = wx.Panel(self)
         if LAYOUT_DEBUG:
             self.pnl_options.SetBackgroundColour("#cfc")
 
         # stereo generation settings
-        # divergence, convergence, method, depth_model, mapper
-
         self.grp_stereo = wx.StaticBox(self.pnl_options, label=T("Stereo Generation"))
 
         self.lbl_divergence = wx.StaticText(self.grp_stereo, label=T("3D Strength"))
@@ -175,7 +167,6 @@ class MainFrame(wx.Frame):
         self.cbo_convergence.SetToolTip("Convergence")
 
         self.lbl_ipd_offset = wx.StaticText(self.grp_stereo, label=T("Your Own Size"))
-        # SpinCtrlDouble is better, but cannot save with PersistenceManager
         self.sld_ipd_offset = wx.SpinCtrl(self.grp_stereo, value="0", min=-10, max=20, name="sld_ipd_offset")
         self.sld_ipd_offset.SetToolTip("IPD Offset")
 
@@ -261,8 +252,6 @@ class MainFrame(wx.Frame):
                                               name="cbo_ema_decay")
         self.cbo_ema_decay.SetSelection(2)
 
-        self.chk_ema_normalize.SetToolTip(T("Video Only") + " " + T("(experimental)"))
-
         layout = wx.FlexGridSizer(rows=11, cols=2, vgap=4, hgap=4)
         layout.Add(self.lbl_divergence, 0, wx.ALIGN_CENTER_VERTICAL)
         layout.Add(self.cbo_divergence, 1, wx.EXPAND)
@@ -291,8 +280,6 @@ class MainFrame(wx.Frame):
         sizer_stereo.Add(layout, 1, wx.ALL | wx.EXPAND, 4)
 
         # video encoding
-        # sbs/vr180, padding
-        # max-fps, crf, preset, tune
         self.grp_video = wx.StaticBox(self.pnl_options, label=T("Video Encoding"))
 
         self.lbl_video_format = wx.StaticText(self.grp_video, label=T("Video Format"))
@@ -396,7 +383,6 @@ class MainFrame(wx.Frame):
         sizer_rembg.Add(layout, 1, wx.ALL | wx.EXPAND, 4)
 
         # input video filter
-        # deinterlace, rotate, vf
         self.grp_video_filter = wx.StaticBox(self.pnl_options, label=T("Video Filter"))
         self.chk_start_time = wx.CheckBox(self.grp_video_filter, label=T("Start Time"),
                                           name="chk_start_time")
@@ -461,20 +447,18 @@ class MainFrame(wx.Frame):
         sizer_video_filter.Add(layout, 1, wx.ALL | wx.EXPAND, 4)
 
         # processor settings
-        # device, batch-size, TTA, Low VRAM, fp16
         self.grp_processor = wx.StaticBox(self.pnl_options, label=T("Processor"))
         self.lbl_device = wx.StaticText(self.grp_processor, label=T("Device"))
         self.cbo_device = wx.ComboBox(self.grp_processor, size=(200, -1), style=wx.CB_READONLY,
                                       name="cbo_device")
-        if torch.cuda.is_available():
-            for i in range(torch.cuda.device_count()):
-                device_name = torch.cuda.get_device_properties(i).name
+
+        if mlx.device_count() > 0:
+            for i in range(mlx.device_count()):
+                device_name = mlx.get_device_properties(i).name
                 self.cbo_device.Append(device_name, i)
-            if torch.cuda.device_count() > 0:
-                self.cbo_device.Append(T("All CUDA Device"), -2)
-        elif torch.backends.mps.is_available():
-            self.cbo_device.Append("MPS", 0)
-        self.cbo_device.Append("CPU", -1)
+            self.cbo_device.Append(T("All MLX Devices"), -2)
+        else:
+            self.cbo_device.Append("CPU", -1)
         self.cbo_device.SetSelection(0)
 
         self.lbl_zoed_batch_size = wx.StaticText(self.grp_processor, label=T("Depth") + " " + T("Batch Size"))
@@ -537,7 +521,6 @@ class MainFrame(wx.Frame):
         self.pnl_process.SetSizer(layout)
 
         # main layout
-
         layout = wx.BoxSizer(wx.VERTICAL)
         layout.Add(self.pnl_file, 0, wx.ALL | wx.EXPAND, 8)
         layout.Add(self.pnl_options, 1, wx.ALL | wx.EXPAND, 8)
@@ -576,7 +559,6 @@ class MainFrame(wx.Frame):
                         self.cbo_divergence, self.cbo_convergence, self.cbo_pad):
             control.SetDropTarget(FileDropCallback(self.on_drop_files))
 
-        # Fix Frame and Panel background colors are different in windows
         self.SetBackgroundColour(self.pnl_file.GetBackgroundColour())
 
         # state
@@ -612,7 +594,7 @@ class MainFrame(wx.Frame):
         self.update_ema_normalize()
         self.update_video_format()
         self.update_video_codec()
-
+        
     def get_anaglyph_method(self):
         if "Anaglyph" in self.cbo_stereo_format.GetValue():
             anaglyph = self.cbo_stereo_format.GetValue().split(" ")[-1]
